@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Filip Jajo Simulator</title>
+  <style>
+    body {
+      background: black;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    h2 {
+      margin: 10px;
+      font-size: 28px;
+    }
+
+    #controls {
+      margin-bottom: 10px;
+    }
+
+    input[type="text"], button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    #container {
+      width: 90%;
+      height: 600px;
+      margin: auto;
+      margin-top: 20px;
+      border: 8px solid;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .image {
+      position: absolute;
+      width: 150px;
+      height: auto;
+      cursor: pointer;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<h2>FILIP JAJ0 SIMULATOR</h2>
+
+<div id="controls">
+  <input id="urlInput" type="text" placeholder="Paste image URL">
+  <button onclick="addImage()">Add Image</button>
+</div>
+
+<div id="container">
+  <canvas id="particleCanvas"></canvas>
+</div>
+
+<!-- Sounds -->
+<audio id="cornerSound" src="https://raw.githubusercontent.com/SigmaBreaker/Screensaver/refs/heads/main/yippee-(tbh-creature)-sound-effect!!-made-with-Voicemod.mp3" preload="auto"></audio>
+<audio id="bounceSound" src="https://raw.githubusercontent.com/SigmaBreaker/Screensaver/refs/heads/main/roblox-splat-made-with-Voicemod.mp3" preload="auto"></audio>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script>
+  const container = document.getElementById('container');
+  const canvas = document.getElementById('particleCanvas');
+  const ctx = canvas.getContext('2d');
+  const cornerSound = document.getElementById('cornerSound');
+  const bounceSound = document.getElementById('bounceSound');
+
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+
+  let images = [];
+  let particles = [];
+
+  function random(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function addImage() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) return;
+
+    const img = document.createElement('img');
+    img.className = 'image';
+    img.src = url;
+
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    const size = 150;
+
+    const imageObj = {
+      element: img,
+      x: random(0, w - size),
+      y: random(0, h - size),
+      dx: random(2, 4) * (Math.random() < 0.5 ? -1 : 1),
+      dy: random(2, 4) * (Math.random() < 0.5 ? -1 : 1),
+      size: size
+    };
+
+    img.onclick = () => {
+      container.removeChild(img);
+      images = images.filter(i => i !== imageObj);
+    };
+
+    container.appendChild(img);
+    images.push(imageObj);
+  }
+
+  function hslToRgb(h, s, l) {
+    let r, g, b;
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  function drawParticles(x, y, color) {
+    for (let i = 0; i < 10; i++) {
+      particles.push({
+        x, y,
+        vx: random(-3, 3),
+        vy: random(-3, 3),
+        alpha: 1,
+        size: 4,
+        color,
+        life: 25
+      });
+    }
+  }
+
+  function updateParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach((p, i) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life--;
+      p.alpha -= 0.04;
+
+      ctx.fillStyle = `rgba(${p.color[0]}, ${p.color[1]}, ${p.color[2]}, ${p.alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (p.life <= 0) particles.splice(i, 1);
+    });
+  }
+
+  function isCorner(x, y, w, h, cw, ch) {
+    const tolerance = 12;
+    const near = (a, b) => Math.abs(a - b) < tolerance;
+    return (
+      (near(x, 0) && near(y, 0)) ||
+      (near(x + w, cw) && near(y, 0)) ||
+      (near(x, 0) && near(y + h, ch)) ||
+      (near(x + w, cw) && near(y + h, ch))
+    );
+  }
+
+  function animate() {
+    updateParticles();
+
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+
+    images.forEach((img, index) => {
+      img.x += img.dx;
+      img.y += img.dy;
+
+      let bounced = false;
+
+      if (img.x <= 0 || img.x + img.size >= w) {
+        img.dx *= -1;
+        bounced = true;
+      }
+      if (img.y <= 0 || img.y + img.size >= h) {
+        img.dy *= -1;
+        bounced = true;
+      }
+
+      if (bounced) {
+        bounceSound.currentTime = 0;
+        bounceSound.play();
+
+        const rgb = hslToRgb(hue / 360, 1, 0.5);
+        drawParticles(img.x + img.size / 2, img.y + img.size / 2, rgb);
+
+        if (isCorner(img.x, img.y, img.size, img.size, w, h)) {
+          cornerSound.currentTime = 0;
+          cornerSound.play();
+
+          confetti({
+            origin: {
+              x: (img.x + img.size / 2) / w,
+              y: (img.y + img.size / 2) / h
+            },
+            particleCount: 200,
+            spread: 160,
+            scalar: 1.4
+          });
+        }
+      }
+
+      // Collision with other images
+      images.forEach((other, i) => {
+        if (img !== other && i > index) {
+          if (!(img.x + img.size < other.x || img.x > other.x + other.size ||
+                img.y + img.size < other.y || img.y > other.y + other.size)) {
+            // Simple bounce swap
+            const tempDX = img.dx;
+            const tempDY = img.dy;
+            img.dx = other.dx;
+            img.dy = other.dy;
+            other.dx = tempDX;
+            other.dy = tempDY;
+          }
+        }
+      });
+
+      img.element.style.left = `${img.x}px`;
+      img.element.style.top = `${img.y}px`;
+    });
+
+    requestAnimationFrame(animate);
+  }
+
+  let hue = 0;
+  setInterval(() => {
+    hue = (hue + 1) % 360;
+    const [r, g, b] = hslToRgb(hue / 360, 1, 0.5);
+    container.style.borderColor = `rgb(${r}, ${g}, ${b})`;
+  }, 40);
+
+  animate();
+</script>
+</body>
+</html>
+
+<div id="customFooter">
+  <!-- You can put your custom text or elements here -->
+  <p>HOW TO USE
+Paste an raw image link and click add image click on the image to remove it thats all have fun my fellas</p>
+</div>
+
+<style>
+  #customFooter {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 2px solid #555;
+    color: #ccc;
+    font-size: 16px;
+    text-align: center;
+  }
+</style>
